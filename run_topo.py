@@ -7,6 +7,7 @@ import imp
 
 from mininet.net import Mininet
 from mininet.cli import CLI
+from mininet.node import RemoteController
 from mininet.log import setLogLevel
 from mininet.topo import LinearTopo
 
@@ -42,7 +43,8 @@ def start_rpc_server():
 def run_mininet(topo):
     global net
     try:
-        net = Mininet(topo=topo, controller=None)
+        c0 = RemoteController('c0', ip='172.17.0.1', port=6653)
+        net = Mininet(topo=topo, controller=c0)
         net.start()
 
         print "Iniciando servidor RPC em uma thread separada..."
@@ -83,7 +85,7 @@ if __name__ == '__main__':
              print "Erro ao carregar topologia: %s" % e
 
     if topo is None:
-        print "Nenhuma topologia customizada carregada. Usando LinearTopo(k=4) como padrao."
+        print "usando topologia linear k=4"
         topo = LinearTopo(k=4)
 
     run_mininet(topo)

