@@ -10,7 +10,8 @@ Funcionamento do ```botmaster.py```
 * é o painel de controle da "botnet";
 * se conecta com o server rpc e usa as duas funções providas pelo server para obter as informações necessárias e executar comandos;
 * Todo o resto das funcionalidades é baseada nessas duas premissas.
-Como usar:
+
+# Como usar:
 Em outro terminal, inicie um controlador de sua preferência.
 
 Execute o comando a seguir, o arquivo topologia.py é opcional mas recomendado.
