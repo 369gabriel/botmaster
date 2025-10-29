@@ -5,7 +5,7 @@ Funcionamento do ```run_topology.py```:
 	* run_command_on_host(host, command):
 		* recebe, como parâmetro, um hostname e um comando;
 		* o comando é executado dentro daquele host, com o hostname especificado no mininet;
-* Além do host rpc, ele executa a topologia passada como argumento, na execução do comando ou uma topologia padrão definida como a linear com k=4;
+* Além do host rpc, ele executa a topologia passada como argumento, na execução do script, ou uma topologia padrão definida como a linear com k=4;
 Funcionamento do ```botmaster.py```
 * é o painel de controle da "botnet";
 * se conecta com o server rpc e usa as duas funções providas pelo server para obter as informações necessárias e executar comandos;
