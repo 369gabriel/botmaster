@@ -37,7 +37,6 @@ def start_rpc_server():
     server = SimpleXMLRPCServer.SimpleXMLRPCServer(("localhost", 8000), logRequests=False, allow_none=True)
     server.register_function(get_all_hosts_info)
     server.register_function(run_command_on_host)
-    print "Servidor RPC iniciado em http://localhost:8000"
     server.serve_forever()
 
 def run_mininet(topo):
@@ -47,19 +46,16 @@ def run_mininet(topo):
         net = Mininet(topo=topo, controller=c0)
         net.start()
 
-        print "Iniciando servidor RPC em uma thread separada..."
         rpc_thread = threading.Thread(target=start_rpc_server)
         rpc_thread.daemon = True
         rpc_thread.start()
 
-        print "Topologia em execucao. Entrando na CLI..."
         CLI(net)
 
     except Exception as e:
-        print "Ocorreu um erro: %s" % e
+        pass
     finally:
         if net:
-            print "Encerrando rede Mininet..."
             net.stop()
 
 if __name__ == '__main__':
@@ -76,16 +72,13 @@ if __name__ == '__main__':
             if hasattr(topo_module, 'topos') and topo_module.topos:
                 topo_name = topo_module.topos.keys()[0]
                 topo = topo_module.topos[topo_name]()
-                print "Carregada topologia customizada '%s' de %s" % (topo_name, topo_file)
             else:
-                print "Erro: O arquivo %s nao contem uma variavel 'topos'." % topo_file
         except ImportError as e:
             print "Erro ao importar %s: %s" % (topo_file, e)
         except Exception as e:
              print "Erro ao carregar topologia: %s" % e
 
     if topo is None:
-        print "usando topologia linear k=4"
         topo = LinearTopo(k=4)
 
     run_mininet(topo)
