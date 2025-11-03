@@ -73,6 +73,7 @@ if __name__ == '__main__':
                 topo_name = topo_module.topos.keys()[0]
                 topo = topo_module.topos[topo_name]()
             else:
+                pass
         except ImportError as e:
             print "Erro ao importar %s: %s" % (topo_file, e)
         except Exception as e:
