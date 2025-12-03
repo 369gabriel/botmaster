@@ -80,7 +80,7 @@ if __name__ == '__main__':
              print "Erro ao carregar topologia: %s" % e
 
     if topo is None:
-        topo = LinearTopo(k=4)
+        topo = LinearTopo(k=10)
 
     run_mininet(topo)
 

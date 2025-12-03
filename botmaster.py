@@ -1,16 +1,43 @@
 #!/usr/bin/python2
+# -*- coding: utf-8 -*-
 import xmlrpclib
 import random
 import re
+import os
+import sys
 from attack_logger import AttackLogger
 
 server = xmlrpclib.ServerProxy('http://localhost:8000')
 
-# Inicializa o logger de ataques
+
 attack_logger = AttackLogger()
 
 controlled_hosts = set()
 available_hosts = {}
+
+def clean_environment():
+    print "\n--- Limpeza de Ambiente ---"
+    
+    files_to_remove = [
+        '../controller/attack_flows.csv', 
+        '../controller/controller_preds.csv'    
+    ]
+    
+    for file_path in files_to_remove:
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                print "Arquivo removido: %s" % file_path
+            except OSError as e:
+                print "Erro ao remover %s: %s" % (file_path, e)
+        else:
+            print "Arquivo limpo (nao existia): %s" % file_path
+            
+    print "Logs anteriores apagados com sucesso."
+    
+    global attack_logger
+    attack_logger = AttackLogger()
+    print "AttackLogger reinicializado.\n"
 
 def update_available_hosts():
     global available_hosts
@@ -25,7 +52,6 @@ def update_available_hosts():
 
 def host_management_menu():
     global controlled_hosts
-
     while True:
         print "\n--- gerenciamento de hosts ---"
         print "1. listar hosts"
@@ -41,7 +67,6 @@ def host_management_menu():
                 if not available_hosts:
                     print "nenhum host encontrado."
                     continue
-
                 print "hosts diponiveis"
                 for host_name, ip in sorted(available_hosts.items()):
                     status = "(controlado)" if host_name in controlled_hosts else "(nao controlado)"
@@ -53,13 +78,11 @@ def host_management_menu():
             if not infectable_hosts:
                 print "nenhum host disponivel para infeccao."
                 continue
-
             print "hosts disponiveis para infeccao:"
             for h in sorted(infectable_hosts):
                 print "  - %s (IP: %s)" % (h, available_hosts[h])
             hosts_to_infect_input = raw_input("digite os hosts para adicionar (separados por espaco, ex: h1 h2): ")
             hosts_list = hosts_to_infect_input.replace(',', ' ').split()
-
             added_count = 0
             for host_name in hosts_list:
                 host_name = host_name.strip()
@@ -127,16 +150,13 @@ def select_attackers():
     if not controlled_hosts:
         print "nenhum host controlado."
         return []
-
     while True:
         print "\n--- selecionar atacantes (de %d controlados) ---" % len(controlled_hosts)
         print "1. um host especifico"
         print "2. n hosts aleatorios"
         print "3. todos os hosts controlados"
         choice = raw_input("Escolha (1-3): ")
-
         hosts_controlados_lista = sorted(list(controlled_hosts))
-
         if choice == '1':
             print "hosts controlados:"
             for i, host_name in enumerate(hosts_controlados_lista):
@@ -150,7 +170,6 @@ def select_attackers():
                     print "host invalido ou nao controlado."
             except (IndexError, ValueError):
                 print "selecao invalida."
-
         elif choice == '2':
             try:
                 num_str = raw_input("quantos hosts aleatorios? ")
@@ -166,13 +185,11 @@ def select_attackers():
                     break
             except ValueError:
                 print "numero invalido."
-
         elif choice == '3':
             attackers = hosts_controlados_lista
             break
         else:
             print "opcao invalida."
-
     print "atacantes selecionados: %s" % ', '.join(attackers)
     return attackers
 
@@ -180,77 +197,69 @@ def launch_test_menu():
     if not controlled_hosts:
         print "nenhum host controlado. infecte hosts primeiro usando o Menu 1."
         return
-
     if not update_available_hosts():
         return
-
     print "\n--- lancar teste de trafego ---"
     print "alvos disponiveis :"
-
     available_targets = {}
     for host_name, ip in available_hosts.items():
         if host_name not in controlled_hosts:
             available_targets[host_name] = ip
-
     if not available_targets:
         print "nenhum alvo disponivel. todos os hosts estao sob seu controle."
         return
-
     for host_name, ip in sorted(available_targets.items()):
         print "  - %s (IP: %s)" % (host_name, ip)
-
     target_ip = raw_input("Digite o IP do alvo (ex: 10.0.0.4): ")
-
     if not any(ip == target_ip for ip in available_targets.values()):
         print "aviso: O IP '%s' nao e um alvo valido ou pertence a um host controlado." % target_ip
         if raw_input("deseja continuar mesmo assim? (s/n): ").lower() != 's':
             print "teste cancelado."
             return
-
     print "\n--- Tipo de Trafego ---"
     print "1. ping (ICMP Flood)"
     print "2. hping3 (TCP SYN Flood)"
     print "3. hping3 (UDP Flood)"
-    print "4. iperf (TCP/UDP Flood - requer iperf instalado nos hosts)"
+    print "4. iperf (TCP/UDP Flood)"
     test_type = raw_input("Escolha (1-4): ")
-    
     command_template = ""
     attack_type_name = ""
     port = None
     duration = None
-    
     if test_type == '1':
         duration = raw_input("duracao do ping em segundos (ex: 10): ")
         command_template = "timeout %s ping -f %s &" % (duration, target_ip)
         attack_type_name = "ping"
-    
     elif test_type == '2':
         duration = raw_input("duracao do ataque em segundos (ex: 10): ")
         port = raw_input("porta alvo (ex: 80): ")
         command_template = "timeout %s hping3 -S --flood -p %s %s &" % (duration, port, target_ip)
         attack_type_name = "tcp_syn"
-
     elif test_type == '3':
         duration = raw_input("duracao do ataque em segundos (ex: 10): ")
         port = raw_input("Porta alvo (ex: 53): ")
         command_template = "timeout %s hping3 --udp --flood -p %s %s &" % (duration, port, target_ip)
         attack_type_name = "udp"
-
     elif test_type == '4':
         duration = raw_input("duracao do iperf em segundos (ex: 10): ")
         command_template = "iperf -c %s -t %s &" % (target_ip, duration)
         attack_type_name = "iperf"
     else:
         return
-
+    
     attackers = select_attackers()
-
     if not attackers:
         print "nenhum atacante selecionado. teste cancelado."
         return
+    
+    attackers_ips = []
+    for att in attackers:
+        if att in available_hosts:
+            attackers_ips.append(available_hosts[att])
+        else:
+            attackers_ips.append(att)
 
     print "\niniciando teste de %s contra %s..." % (', '.join(attackers), target_ip)
-
     for host_name in attackers:
         command = command_template
         print "  - enviando comando para %s..." % host_name
@@ -259,14 +268,11 @@ def launch_test_menu():
             print "    resposta de %s: %s" % (host_name, response)
         except Exception as e:
             print "    erro ao contatar %s: %s" % (host_name, e)
-
     print "comandos de teste enviados."
-    
-    # Registra o ataque no CSV
     try:
         attack_id = attack_logger.log_attack(
             attack_type=attack_type_name,
-            attackers=attackers,
+            attackers=attackers_ips,
             target_ip=target_ip,
             target_port=port,
             duration=duration
@@ -276,32 +282,42 @@ def launch_test_menu():
         print "\nerro ao registrar ataque: %s" % e
 
 def view_attack_report():
-    """Exibe o relatorio de ataques registrados."""
     print "\n--- relatorio de ataques ---"
     try:
         report = attack_logger.generate_report()
-        if report:
-            print report
-        else:
-            print "nenhum ataque registrado ainda."
+        print report
     except Exception as e:
         print "erro ao gerar relatorio: %s" % e
+
+def compare_metrics():
+    print "\n--- Comparacao com Controlador ---"
+    controller_csv = raw_input("Caminho do CSV do controlador: ")
+    if not controller_csv:
+        controller_csv = "../controller/controller_preds.csv"
+    
+    try:
+        result = attack_logger.compare_with_controller(controller_csv)
+        print result
+    except Exception as e:
+        print "Erro na comparacao: %s" % e
 
 def main():
     if not update_available_hosts():
         print "nao foi possivel conectar ao servidor Mininet. encerrando."
         return
-
+    
+    if raw_input("Deseja limpar os logs de testes anteriores? [S/n]: ").lower() != 'n':
+        clean_environment()
+    
     print "Controlador conectado com sucesso."
-
     while True:
         print "\n====== menu principal do controlador ======"
         print "1. gerenciamento de hosts"
         print "2. lancar teste de trafego"
         print "3. visualizar relatorio de ataques"
-        print "4. sair"
-        choice = raw_input("Escolha (1-4): ")
-
+        print "4. comparar metricas (IA vs Real)"
+        print "5. sair"
+        choice = raw_input("Escolha (1-5): ")
         if choice == '1':
             host_management_menu()
         elif choice == '2':
@@ -309,11 +325,11 @@ def main():
         elif choice == '3':
             view_attack_report()
         elif choice == '4':
+            compare_metrics()
+        elif choice == '5':
             break
         else:
             pass
 
 if __name__ == "__main__":
     main()
-
-

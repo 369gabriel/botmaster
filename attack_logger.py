@@ -1,72 +1,54 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 # -*- coding: utf-8 -*-
-"""
-Modulo para registrar ataques em formato CSV.
-"""
 
 import csv
 import os
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
+
 try:
     import uuid
 except ImportError:
-    # Fallback para Python mais antigo
     import random
     class uuid:
         @staticmethod
         def uuid4():
             return str(random.randint(100000, 999999))
 
-class AttackLogger:
-    """Classe responsavel por registrar ataques em formato CSV."""
-    
-    def __init__(self, csv_file='attack_flows.csv'):
-        """
-        Inicializa o logger de ataques.
-        
-        Args:
-            csv_file: Caminho para o arquivo CSV onde os ataques serao salvos.
-        """
+class AttackLogger(object):
+
+    def __init__(self, csv_file='../controller/attack_flows.csv'):
         self.csv_file = csv_file
         self.fieldnames = [
-            'timestamp',
-            'attack_id',
-            'attack_type',
-            'attackers',
-            'target_ip',
-            'target_port',
-            'duration',
-            'num_attackers'
+            'timestamp', 'attack_id', 'attack_type', 'attackers',
+            'target_ip', 'target_port', 'duration', 'num_attackers'
         ]
         self._ensure_csv_exists()
-    
+
     def _ensure_csv_exists(self):
-        """Cria o arquivo CSV com headers se nao existir."""
+        directory = os.path.dirname(self.csv_file)
+        if directory and not os.path.exists(directory):
+            try:
+                os.makedirs(directory)
+            except OSError:
+                pass
+
         if not os.path.exists(self.csv_file):
             with open(self.csv_file, 'w') as f:
                 writer = csv.DictWriter(f, fieldnames=self.fieldnames)
                 writer.writeheader()
-    
+
     def log_attack(self, attack_type, attackers, target_ip, target_port=None, duration=None):
-        """
-        Registra um ataque no arquivo CSV.
-        
-        Args:
-            attack_type: Tipo do ataque (ping, tcp_syn, udp, iperf)
-            attackers: Lista de hosts atacantes
-            target_ip: IP do alvo
-            target_port: Porta do alvo (opcional)
-            duration: Duracao do ataque em segundos (opcional)
-            
-        Returns:
-            attack_id: ID unico do ataque registrado
-        """
         attack_id = str(uuid.uuid4())
         timestamp = datetime.now().isoformat()
         
-        # Converte lista de atacantes para string
-        attackers_str = ','.join(attackers) if isinstance(attackers, list) else str(attackers)
-        
+        if isinstance(attackers, list):
+            attackers_str = ','.join(attackers)
+            num_attackers = len(attackers)
+        else:
+            attackers_str = str(attackers)
+            num_attackers = 1
+
         attack_data = {
             'timestamp': timestamp,
             'attack_id': attack_id,
@@ -74,106 +56,127 @@ class AttackLogger:
             'attackers': attackers_str,
             'target_ip': target_ip,
             'target_port': target_port if target_port else '',
-            'duration': duration if duration else '',
-            'num_attackers': len(attackers) if isinstance(attackers, list) else 1
+            'duration': str(duration) if duration else '0',
+            'num_attackers': num_attackers
         }
-        
+
         with open(self.csv_file, 'a') as f:
             writer = csv.DictWriter(f, fieldnames=self.fieldnames)
             writer.writerow(attack_data)
-        
+
         return attack_id
-    
+
     def generate_report(self):
-        """
-        Gera um relatorio dos ataques registrados.
-        
-        Returns:
-            String com o relatorio formatado ou None se nao houver ataques.
-        """
         if not os.path.exists(self.csv_file):
-            return None
-        
+            return "Nenhum arquivo de log encontrado."
+
         attacks = []
         with open(self.csv_file, 'r') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 attacks.append(row)
-        
+
         if not attacks:
-            return None
-        
-        # Gera estatisticas
-        report_lines = []
-        report_lines.append("=" * 60)
-        report_lines.append("RELATORIO DE ATAQUES")
-        report_lines.append("=" * 60)
-        report_lines.append("")
-        report_lines.append("Total de ataques registrados: %d" % len(attacks))
-        report_lines.append("")
-        
-        # Conta ataques por tipo
-        attack_types = {}
-        for attack in attacks:
-            attack_type = attack['attack_type']
-            attack_types[attack_type] = attack_types.get(attack_type, 0) + 1
-        
-        report_lines.append("Ataques por tipo:")
-        for attack_type, count in sorted(attack_types.items()):
-            report_lines.append("  - %s: %d" % (attack_type, count))
-        report_lines.append("")
-        
-        # Lista ultimos 10 ataques
-        report_lines.append("Ultimos %d ataques:" % min(10, len(attacks)))
-        for attack in attacks[-10:]:
-            report_lines.append("  - [%s] %s -> %s (tipo: %s, atacantes: %s)" % (
-                attack['timestamp'][:19],  # Remove microssegundos
-                attack['attackers'],
-                attack['target_ip'],
-                attack['attack_type'],
-                attack['num_attackers']
-            ))
-        
-        report_lines.append("")
-        report_lines.append("=" * 60)
-        
-        return '\n'.join(report_lines)
+            return "Nenhum ataque registrado."
 
+        lines = []
+        lines.append("=" * 60)
+        lines.append("RELATORIO DE ATAQUES")
+        lines.append("=" * 60)
+        lines.append("Total: %d" % len(attacks))
+        lines.append("")
+        
+        lines.append("Ultimos 5 ataques:")
+        for atk in attacks[-5:]:
+            lines.append(" - [%s] %s -> %s (%s)" % (atk['timestamp'], atk['attackers'], atk['target_ip'], atk['attack_type']))
+            
+        return "\n".join(lines)
 
-def test_logger():
-    """Funcao de teste para o AttackLogger."""
-    print("Testando AttackLogger...")
-    
-    # Cria logger de teste
-    test_file = 'test_attacks.csv'
-    if os.path.exists(test_file):
-        os.remove(test_file)
-    
-    logger = AttackLogger(csv_file=test_file)
-    
-    # Testa registro de varios tipos de ataque
-    print("Registrando ataque de ping...")
-    attack_id1 = logger.log_attack('ping', ['h1', 'h2'], '10.0.0.5', duration=10)
-    print("  Attack ID: %s" % attack_id1)
-    
-    print("Registrando ataque TCP SYN...")
-    attack_id2 = logger.log_attack('tcp_syn', ['h3'], '10.0.0.6', target_port=80, duration=15)
-    print("  Attack ID: %s" % attack_id2)
-    
-    print("Registrando ataque UDP...")
-    attack_id3 = logger.log_attack('udp', ['h1', 'h2', 'h3'], '10.0.0.7', target_port=53, duration=20)
-    print("  Attack ID: %s" % attack_id3)
-    
-    print("\nGerando relatorio...")
-    report = logger.generate_report()
-    if report:
-        print(report)
-    else:
-        print("Nenhum ataque registrado.")
-    
-    print("\nArquivo CSV criado: %s" % test_file)
-    print("Teste concluido!")
+    def compare_with_controller(self, controller_log_path):
+        if not os.path.exists(self.csv_file):
+            return "Erro: Log de ataques (Ground Truth) nao encontrado."
+        
+        if not os.path.exists(controller_log_path):
+            return "Erro: Log do controlador nao encontrado em: %s" % controller_log_path
 
+        print "\n" + "="*50
+        print "ANALISE: GROUND TRUTH vs PREDICAO (CONTROLADOR)"
+        print "="*50
 
-if __name__ == '__main__':
-    test_logger()
+        ground_truth_attacks = []
+        with open(self.csv_file, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    time_str = row['timestamp'].split('.')[0]
+                    start_time = datetime.strptime(time_str, "%Y-%m-%dT%H:%M:%S")
+                    
+                    dur = float(row['duration']) if row['duration'] else 0
+                    end_time = start_time + timedelta(seconds=dur)
+                    
+                    src_ips = [ip.strip() for ip in row['attackers'].split(',')]
+                    
+                    ground_truth_attacks.append({
+                        'start': start_time,
+                        'end': end_time,
+                        'src_ips': src_ips,
+                        'dst_ip': row['target_ip'],
+                        'type': row['attack_type'],
+                        'detected': False
+                    })
+                except Exception as e:
+                    continue
+
+        predictions = []
+        with open(controller_log_path, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    time_str = row['timestamp'].split('.')[0]
+                    detect_time = datetime.strptime(time_str, "%Y-%m-%dT%H:%M:%S")
+                    
+                    predictions.append({
+                        'time': detect_time,
+                        'src': row['src_ip'],
+                        'dst': row['dst_ip'],
+                        'matched': False
+                    })
+                except Exception as e:
+                    continue
+
+        tp = 0; fp = 0; fn = 0
+
+        for attack in ground_truth_attacks:
+            attack_detected = False
+            margin_start = attack['start'] - timedelta(seconds=2)
+            margin_end = attack['end'] + timedelta(seconds=5)
+
+            for pred in predictions:
+                if margin_start <= pred['time'] <= margin_end:
+                    if pred['src'] in attack['src_ips'] and pred['dst'] == attack['dst_ip']:
+                        attack_detected = True
+                        pred['matched'] = True
+            
+            if attack_detected:
+                tp += 1
+            else:
+                fn += 1
+
+        for pred in predictions:
+            if not pred['matched']:
+                fp += 1
+
+        precision = float(tp) / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = float(tp) / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+
+        res = []
+        res.append("Verdadeiros Positivos (TP): %d" % tp)
+        res.append("Falsos Negativos      (FN): %d" % fn)
+        res.append("Falsos Positivos      (FP): %d" % fp)
+        res.append("-" * 30)
+        res.append("PRECISAO: %.2f%%" % (precision * 100))
+        res.append("RECALL:   %.2f%%" % (recall * 100))
+        res.append("F1-SCORE: %.2f%%" % (f1 * 100))
+        
+        return "\n".join(res)
